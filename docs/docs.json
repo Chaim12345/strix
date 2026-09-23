@@ -68,6 +68,7 @@
             "pages": [
               "advanced/configuration",
               "advanced/skills",
+              "self-hosted-platform",
               "contributing"
             ]
           }

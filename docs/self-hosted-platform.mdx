@@ -1,0 +1,215 @@
+---
+title: Self-hosted platform
+description: Run a multi-user Strix control plane inside your own infrastructure.
+---
+
+# Self-hosted platform
+
+The open-source Strix engine can run a single scan on a developer machine. The self-hosted platform adds the control plane used by Strix Cloud: identity, workspaces, durable scans, uploads, findings, reporting, schedules, integrations, analytics, and audit history.
+
+The implementation is an independent Apache-2.0 service. It does not copy hosted Strix code, credentials, private application registrations, license keys, billing configuration, or private threat-intelligence data.
+
+## Compatibility goals
+
+The local service exposes the same `/api/v1` contract used by `strix cloud`:
+
+- Bearer authentication, `X-Strix-Workspace`, `X-Strix-Authorization`, and `Idempotency-Key`
+- Stable UUID resource identifiers
+- Cloud CLI pagination, filters, error bodies, and workspace headers
+- Scan, vulnerability, domain, repository, schedule, token, webhook, upload, and workspace operations
+- Existing source-upload flow through a same-origin `/storage/v1/` URL
+- SARIF, report, audit, log, and run-artifact downloads
+- Local-only model, run-log, and offline-license operations
+
+`STRIX_APP_URL` already selects the platform origin. A self-hosted installation can therefore use the existing command surface:
+
+```bash
+export STRIX_APP_URL="https://strix.example.internal"
+export STRIX_API_TOKEN="<operator-created-token>"
+strix cloud workspaces list
+strix cloud scans start --source ./app --approve-sha256 <hash> --wait
+strix cloud vulns list --severity critical
+```
+
+## Feature mapping
+
+| Cloud capability | Self-hosted equivalent |
+| --- | --- |
+| Hosted account and device login | Local bootstrap owner, users, revocable API tokens, optional OIDC |
+| Organizations and workspaces | Relational organizations, memberships, invitations, roles, and workspace switching |
+| Managed scans | Durable queue with one isolated worker process per scan |
+| Live steering and cancellation | Durable messages and cancellation requests delivered to the scan worker |
+| Source uploads | Same-origin streaming uploads, immutable snapshots, strict archive validation, and retention controls |
+| Domain and repository assets | Workspace-owned assets, DNS/file/meta verification, and provider adapters |
+| Findings and triage | Normalized findings, status history, bulk updates, retests, and regression tracking |
+| Reports | Markdown, JSON, CSV, SARIF 2.1.0, PDF, DOCX, and redacted diagnostics |
+| Schedules | Time-zone-aware cron schedules using the same idempotent scan-start path |
+| Webhooks | HMAC-signed events, delivery history, bounded retries, and failed-delivery replay |
+| Analytics | Workspace-scoped posture, trend, remediation, scan-frequency, and cost aggregates |
+| Audit log | Immutable actor/resource/action events with JSON, CSV, and NDJSON export |
+| Integrations | Operator-owned GitHub, GitLab, Bitbucket, Slack, Jira, and Linear applications |
+| PR security reviews | Provider webhooks, repository scans, merge verdicts, check publishing, and SARIF upload |
+| Auto-fix | Finding-to-patch workflow, isolated validation, branch creation, and provider pull request |
+| Supply chain | Dependency scans and component findings projected into SPDX or CycloneDX SBOMs |
+| Container scanning | Registry adapters, watched images, image scans, layers, components, and findings |
+| Security chat | Persistent workspace chat backed by the same isolated agent runtime |
+| Knowledge | Organization documents, policies, and repository profiles injected into scan context |
+| Network connectors | Operator-run overlay connectors with expiring enrollment credentials and health checks |
+| Billing | Optional local quotas and an immutable usage ledger; no SaaS payment processing |
+| Enterprise license | Offline operator-controlled entitlement policy; no Strix signing-key compatibility claim |
+
+## Architecture
+
+### Control plane
+
+The API owns durable metadata and never treats a run directory as its system of record. The control-plane schema is relational and runs on SQLite for a zero-dependency single-node installation; production deployments can use a PostgreSQL adapter with the same transactional boundaries. It stores:
+
+- users, organizations, memberships, invitations, roles, sessions, and API-token hashes
+- assets, verification challenges, upload snapshots, scans, targets, jobs, and worker leases
+- findings, status history, retests, artifacts, events, reports, and integrations
+- schedules, webhook subscriptions and deliveries, usage entries, and audit events
+
+Every tenant-owned row carries an organization identifier. Object authorization is applied before existence is revealed, including background jobs, exports, uploads, logs, and support tooling.
+
+### Execution plane
+
+The current agent runtime has process-global report, tool, settings, and sandbox state. The first production worker model therefore runs exactly one scan in a dedicated process. The worker:
+
+1. Claims a durable job lease.
+2. Materializes immutable input in a scan-private directory.
+3. Starts the current Strix runtime with explicit callbacks.
+4. Streams ordered state and usage events.
+5. Projects artifacts into normalized findings and object storage.
+6. Settles usage, releases the lease, and reconciles sandbox cleanup.
+
+Multiple workers may run concurrently because process isolation prevents settings and report state from crossing workspaces.
+
+### Storage
+
+Metadata and transactional state live in the relational control-plane database. Large data uses a blob-store interface with immutable content-addressed keys:
+
+- source archives
+- agent traces and large tool output
+- captured HTTP exchanges
+- report bundles and raw traffic
+- SBOM snapshots and diagnostic archives
+
+A local filesystem implementation is the default. Production deployments can use S3-compatible object storage. Database rows retain hashes, sizes, media types, owners, retention classes, and deletion state.
+
+### Authentication and authorization
+
+The bootstrap command creates the first local owner and a full-scoped token. Tokens are shown once and stored as salted hashes. Requests apply all of these checks:
+
+1. token validity, expiration, and revocation
+2. organization selection and membership
+3. API scope
+4. role permission
+5. optional asset-level RBAC scope
+6. resource ownership and legal state transition
+
+Administrative browser sessions use rotating opaque cookies with `Secure`, `HttpOnly`, and `SameSite=Lax` settings when TLS is enabled. OIDC is an optional delegated identity provider; local password and token authentication do not depend on it.
+
+Secrets for providers, test users, registries, and model configuration are encrypted with an operator-supplied master key. Plaintext secrets are never returned after creation.
+
+## Delivery phases
+
+### Phase 1: durable single-node control plane
+
+- relational database schema and migrations
+- bootstrap owner, organizations, workspaces, memberships, invitations, roles, and API tokens
+- domain and repository assets with ownership evidence
+- same-origin uploads and archive validation
+- scan creation, durable queue, isolated workers, cancellation, rerun, and retest
+- normalized findings, status history, reports, SARIF, and run logs
+- `strix server` lifecycle commands and Cloud CLI compatibility
+- audit events, basic analytics, license status, and local LLM configuration
+
+### Phase 2: continuous operations
+
+- worker leases, heartbeats, orphan reconciliation, and operator retry controls
+- cron schedules with timezone and overlap policy
+- signed webhooks, retries, delivery history, and replay
+- retention and deletion workers
+- knowledge documents, policies, and repository profiles
+- Slack, Jira, and Linear notification adapters
+- local quotas and usage accounting
+
+### Phase 3: developer workflow
+
+- GitHub, GitLab, and Bitbucket application configuration
+- pull-request ingress, review scans, deduplication, and check verdicts
+- SARIF publication and branch-protection guidance
+- patch generation, validation, branch creation, and pull requests
+- Slack, Jira, Linear, and CI/CD event routing
+- interactive dashboard, live scan steering, finding chat, trends, and sharing
+
+### Phase 4: extended attack surface
+
+- asset discovery with import into verified assets
+- supply-chain snapshots, component inventory, and SBOM exports
+- registry adapters, image watches, image scans, and container findings
+- network connector enrollment and health
+- optional OIDC, SCIM, compliance report templates, backups, and disaster recovery
+
+## Local adaptation of hosted-only behavior
+
+### Billing
+
+Self-hosted installations do not emulate Stripe, the Machine Payments Protocol, or Strix checkout products. Billing endpoints return the documented deployment-appropriate response. Operators can instead configure:
+
+- scan and chat budgets from runtime usage
+- workspace quotas
+- reservation and settlement rules
+- an immutable local credit ledger
+- administrative usage exports
+
+### Plans and licenses
+
+Cloud plan gates do not restrict an operator's own installation. Optional local entitlements can enforce policy, but they are not represented as Strix-issued licenses. The local license endpoint reports whether operator policy is enforced and never claims verification of unavailable proprietary keys.
+
+### Integrations
+
+Every provider integration uses an application or credential owned by the operator. Installation URLs, webhook secrets, OAuth callbacks, and registry credentials are generated locally. Hosted Strix application IDs and client secrets are not reused.
+
+### Threat intelligence and learning
+
+The platform can store local finding history, resolved regressions, asset context, and operator-provided documents. Private Strix validation models, proprietary feeds, and private continuous-learning datasets are not copied. Optional public or operator-owned enrichment is isolated behind adapters with explicit licensing and retention rules.
+
+## Security requirements
+
+A production deployment must provide:
+
+- TLS termination and a trusted `STRIX_APP_URL`
+- encrypted database backups and volumes
+- an external object store or encrypted local storage
+- a randomly generated master encryption key stored outside the database
+- network policy separating the API, workers, databases, and target networks
+- egress restrictions appropriate to each workspace
+- a dedicated unprivileged worker identity
+- pinned sandbox and dependency images
+- log redaction and bounded retention
+- rate limits on authentication, uploads, chat, and expensive endpoints
+- audit alerts for token, role, integration, and policy changes
+
+The service must never mark an input target as platform-verified merely because it appeared in a request. Verified external assets require stored ownership evidence. Internal assets require an explicit workspace policy and operator authorization.
+
+## Operational endpoints
+
+- `GET /health` is public and reports process health.
+- `GET /ready` verifies the database, migrations, storage, and worker availability.
+- `GET /metrics` exposes operator metrics and is disabled by default on public interfaces.
+- `GET /api/v1/openapi.json` serves the versioned local contract.
+
+## Acceptance criteria
+
+The control plane is production-usable when:
+
+- a server or worker restart does not lose accepted work
+- one scan runs per process without cross-scan state leakage
+- every resource is isolated by organization and authorized scope
+- ambiguous mutations are idempotent and reconcilable
+- source archives cannot escape their scan directory or bypass declared limits
+- workers leave no untracked running containers after terminal or failed execution
+- reports and SARIF are reproducible from durable findings and artifacts
+- schedules and webhooks cannot bypass scan authorization or idempotency
+- backup and restore preserve control-plane state without exposing secrets
