@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -1382,6 +1382,15 @@ wheels = [
 ]
 
 [[package]]
+name = "nats-py"
+version = "2.16.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2c/c8/739b72c9201081e48000884d476231873ac82f7247c43b33823eaf3c0bfb/nats_py-2.16.0.tar.gz", hash = "sha256:1d137ed7afc9b59033b3199324c6237df2016a5091935871344a787eba6b72fc", size = 79731, upload-time = "2026-09-16T07:47:21.843Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/48/a3/16cec37172144d3362d7551bb823a098b2b2903281fc095dfe4480b8c2fd/nats_py-2.16.0-py3-none-any.whl", hash = "sha256:aeb1ff123966c05833d26c7df7e1d54c1c6d32b612428b21677a2e921f1fecae", size = 93578, upload-time = "2026-09-16T07:47:20.799Z" },
+]
+
+[[package]]
 name = "nodeenv"
 version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2407,6 +2416,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+atlas = [
+    { name = "nats-py" },
+]
 bedrock = [
     { name = "boto3" },
 ]
@@ -2437,6 +2449,7 @@ requires-dist = [
     { name = "google-auth", marker = "extra == 'vertex'", specifier = ">=2.0.0" },
     { name = "litellm", specifier = ">=1.101.0" },
     { name = "markdown-it-py", specifier = ">=3.0.0" },
+    { name = "nats-py", marker = "extra == 'atlas'", specifier = ">=2.6" },
     { name = "openai", specifier = ">=2.45.0,<3" },
     { name = "openai-agents", extras = ["litellm"], specifier = ">=0.19.0,<0.20" },
     { name = "pydantic", specifier = ">=2.11.3" },
@@ -2447,7 +2460,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.0" },
     { name = "rich" },
 ]
-provides-extras = ["vertex", "bedrock"]
+provides-extras = ["vertex", "bedrock", "atlas"]
 
 [package.metadata.requires-dev]
 dev = [

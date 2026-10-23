@@ -55,6 +55,7 @@ dependencies = [
 [project.optional-dependencies]
 vertex = ["google-auth>=2.0.0"]
 bedrock = ["boto3>=1.28.0"]
+atlas = ["nats-py>=2.6"]
 
 [project.scripts]
 strix = "strix.interface.main:main"
@@ -242,6 +243,14 @@ ignore = [
 "tests/test_tool_call_limits.py" = ["N802", "SLF001"]
 "tests/test_stream_idle_timeout.py" = ["N802", "SLF001"]
 "tests/test_unknown_tool_recovery.py" = ["N802"]
+# Atlas bridge: lazy nats import keeps harvest/guard importable without the
+# optional [atlas] extra; stdlib HTTP handler override and CLI status print
+# follow the auth_cli precedent.
+"strix/integrations/atlas/bridge.py" = ["PLC0415"]
+"strix/integrations/atlas/runner.py" = ["PLC0415"]
+"strix/integrations/atlas/stub_llm.py" = ["N802", "T201"]
+"tests/integrations/atlas/test_stub_llm.py" = ["S310", "BLE001", "ARG001"]
+
 "tests/test_report_pdf.py" = ["S105", "S106"]
 # Fake MCP server matches the SDK's MCPServer signature; its args are unused.
 "tests/test_mcp_client.py" = ["S105", "S106", "ARG002"]
